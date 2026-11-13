@@ -1,0 +1,155 @@
+{
+  "version": "1.0",
+  "description": "人格系统权重配置 - 所有参数可独立调整",
+  "data_source_weights": {
+    "battle": 0.6,
+    "dialogue": 0.4
+  },
+  "behavior_events": {
+    "charge_attack": {
+      "description": "主动冲锋贴脸作战",
+      "weights": {
+        "SE_EXPLORATORY": 8.0,
+        "NE_DIVERGENT": 3.0,
+        "TE_EXECUTIVE": 2.0,
+        "FI_INDIVIDUATING": -2.0
+      }
+    },
+    "hold_position": {
+      "description": "固守掩体架点",
+      "weights": {
+        "SE_STABILIZING": 6.0,
+        "SI_HOMEOSTATIC": 7.0,
+        "TE_EMPIRICAL": 3.0,
+        "NE_DIVERGENT": -3.0
+      }
+    },
+    "flank_maneuver": {
+      "description": "绕后/侧翼机动",
+      "weights": {
+        "NE_INTEGRATIVE": 6.0,
+        "NE_DIVERGENT": 5.0,
+        "SE_EXPLORATORY": 4.0,
+        "TI_ANALYTICAL": 3.0,
+        "SI_HOMEOSTATIC": -3.0
+      }
+    },
+    "retreat": {
+      "description": "后撤/战术撤退",
+      "weights": {
+        "SI_RECOLLECTIVE": 5.0,
+        "SI_HOMEOSTATIC": 4.0,
+        "NI_PROPHETIC": 3.0,
+        "TI_ANALYTICAL": 3.0,
+        "SE_EXPLORATORY": -4.0
+      }
+    },
+    "headshot": {
+      "description": "爆头精准射击",
+      "weights": {
+        "TI_PRECISION": 8.0,
+        "SE_STABILIZING": 3.0,
+        "TE_EMPIRICAL": 3.0,
+        "NE_DIVERGENT": -2.0
+      }
+    },
+    "preaime_position": {
+      "description": "预判卡位",
+      "weights": {
+        "NI_PROPHETIC": 7.0,
+        "NI_SYNTHESIZING": 5.0,
+        "TI_ANALYTICAL": 4.0,
+        "SE_EXPLORATORY": -2.0
+      }
+    },
+    "weapon_switch": {
+      "description": "切换武器",
+      "weights": {
+        "NE_DIVERGENT": 5.0,
+        "SE_EXPLORATORY": 4.0,
+        "NE_INTEGRATIVE": 3.0,
+        "SI_HOMEOSTATIC": -3.0
+      }
+    },
+    "cover_reuse": {
+      "description": "重复使用同一掩体",
+      "weights": {
+        "SI_HOMEOSTATIC": 6.0,
+        "SI_RECOLLECTIVE": 5.0,
+        "SE_STABILIZING": 4.0,
+        "NE_DIVERGENT": -4.0
+      }
+    },
+    "route_change": {
+      "description": "更换进攻路线",
+      "weights": {
+        "NE_DIVERGENT": 7.0,
+        "SE_EXPLORATORY": 5.0,
+        "NE_INTEGRATIVE": 4.0,
+        "SI_HOMEOSTATIC": -4.0
+      }
+    },
+    "high_priority_kill": {
+      "description": "优先击杀高威胁目标",
+      "weights": {
+        "TE_EXECUTIVE": 6.0,
+        "TE_EMPIRICAL": 5.0,
+        "TI_ANALYTICAL": 4.0,
+        "NI_SYNTHESIZING": 3.0
+      }
+    },
+    "team_support": {
+      "description": "支援队友",
+      "weights": {
+        "FE_HARMONIZING": 8.0,
+        "FE_INFLUENCING": 4.0,
+        "FI_AUTHENTICATING": 3.0
+      }
+    },
+    "solo_play": {
+      "description": "独自行动",
+      "weights": {
+        "FI_INDIVIDUATING": 6.0,
+        "FI_AUTHENTICATING": 4.0,
+        "TI_PRECISION": 3.0,
+        "FE_HARMONIZING": -4.0
+      }
+    },
+    "trade_calculation": {
+      "description": "计算交换比",
+      "weights": {
+        "TI_ANALYTICAL": 7.0,
+        "TI_PRECISION": 5.0,
+        "TE_EMPIRICAL": 4.0,
+        "NE_INTEGRATIVE": 3.0
+      }
+    },
+    "risk_take": {
+      "description": "高风险决策",
+      "weights": {
+        "SE_EXPLORATORY": 7.0,
+        "NE_DIVERGENT": 5.0,
+        "FI_INDIVIDUATING": 3.0,
+        "SI_HOMEOSTATIC": -5.0
+      }
+    },
+    "conservative_play": {
+      "description": "保守打法",
+      "weights": {
+        "SI_HOMEOSTATIC": 6.0,
+        "SI_RECOLLECTIVE": 5.0,
+        "TE_EMPIRICAL": 4.0,
+        "SE_EXPLORATORY": -5.0
+      }
+    }
+  },
+  "normalization": {
+    "method": "min_max",
+    "range_min": 0.0,
+    "range_max": 100.0
+  },
+  "type_derivation": {
+    "method": "dominant_auxiliary_pair",
+    "top_n_functions": 4
+  }
+}
