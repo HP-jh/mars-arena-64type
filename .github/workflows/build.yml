@@ -50,10 +50,57 @@ jobs:
 
       - name: Build Lua 5.4.6 (static lib for the Lua kernel)
         run: |
-          curl -sSL https://www.lua.org/ftp/lua-5.4.6.tar.gz -o /tmp/lua.tgz
-          tar -xzf /tmp/lua.tgz -C /tmp
-          make -C /tmp/lua-5.4.6 linux MYCFLAGS="-fPIC" >/dev/null
-          ls -l /tmp/lua-5.4.6/src/liblua.a
+          set -euo pipefail
+          URLS="
+            https://www.lua.org/ftp/lua-5.4.6.tar.gz
+            https://github.com/lua/lua/archive/refs/tags/v5.4.6.tar.gz
+          "
+          ok=0
+          for url in $URLS; do
+            for attempt in 1 2 3 4 5; do
+              echo "download attempt $attempt: $url"
+              if curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors \
+                      --connect-timeout 20 --max-time 180 \
+                      "$url" -o /tmp/lua.tgz; then
+                if tar -tzf /tmp/lua.tgz >/dev/null 2>&1; then
+                  ok=1; break 2
+                fi
+                echo "archive looks corrupt, retrying"
+              fi
+              sleep $((attempt * 3))
+            done
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::failed to download Lua 5.4.6 source from all mirrors"
+            exit 1
+          fi
+          rm -rf /tmp/lua-src && mkdir -p /tmp/lua-src
+          tar -xzf /tmp/lua.tgz -C /tmp/lua-src --strip-components=1
+          if [ -d /tmp/lua-src/src ] && [ -f /tmp/lua-src/src/lua.h ]; then
+            SRC=/tmp/lua-src/src
+          elif [ -f /tmp/lua-src/lua.h ]; then
+            SRC=/tmp/lua-src
+          else
+            echo "::error::cannot locate lua.h after extraction"
+            find /tmp/lua-src -maxdepth 3 -name 'lua.h' || true
+            exit 1
+          fi
+          echo "Lua source dir: $SRC"
+          # 只要核心 + 标准库，排除带 main() 的 lua.c / luac.c
+          OBJS=""
+          for f in "$SRC"/l*.c; do
+            base=$(basename "$f")
+            case "$base" in
+              lua.c|luac.c) continue ;;
+            esac
+            gcc -O2 -fPIC -DLUA_USE_LINUX -c "$f" -o "/tmp/lua-${base%.c}.o"
+            OBJS="$OBJS /tmp/lua-${base%.c}.o"
+          done
+          ar rcs "$SRC/liblua.a" $OBJS
+          ls -l "$SRC/liblua.a"
+          # build_all.sh 默认从 /tmp/lua-5.4.6/src 取头文件和静态库
+          [ -e /tmp/lua-5.4.6 ] || ln -s /tmp/lua-src /tmp/lua-5.4.6
+          ls /tmp/lua-5.4.6/src/lua.h
 
       - name: Build native kernels (4 languages x 2 platforms)
         run: ./native/build_all.sh
