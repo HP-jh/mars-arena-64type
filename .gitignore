@@ -19,3 +19,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Native build outputs (rebuilt by CI / native/build_all.sh)
+native/**/build/
+native/rust/target/
+native/lua/lua_source_blob.c
+native/lua/lua_source_blob.h
+build/
