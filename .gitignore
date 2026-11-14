@@ -26,3 +26,4 @@ native/rust/target/
 native/lua/lua_source_blob.c
 native/lua/lua_source_blob.h
 build/
+native/harness/mars_harness

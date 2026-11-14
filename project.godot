@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 PersonalityTracker="*res://personality_64/personality_tracker.gd"
 GameManager="*res://data/game_manager.gd"
 DialogueManager="*res://scenario/dialogue_manager.gd"
+GraphicsQuality="*res://graphics/quality.gd"
 
 [display]
 

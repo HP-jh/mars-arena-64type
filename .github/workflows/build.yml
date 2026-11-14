@@ -1,0 +1,165 @@
+name: Build & Release
+
+# 在云端一次性完成：
+#   1. 用 4 种语言（C++ / Rust / Go / Lua）编译原生内核，Linux .so + Windows .dll
+#   2. 用 322 组 golden 向量逐位校验四种实现（任何偏离直接失败）
+#   3. 导出 Godot 可执行文件（Windows .exe 内嵌 pck、Linux 单体二进制）
+#   4. 打 tag 时自动创建 Release 并上传二进制 —— 下载解压后双击即可运行
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.2.2"
+  GODOT_RELEASE: "4.2.2-stable"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 \
+            xxd unzip curl libgl1-mesa-dev
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix || true
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix || true
+          x86_64-w64-mingw32-g++ --version | head -1
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Build Lua 5.4.6 (static lib for the Lua kernel)
+        run: |
+          curl -sSL https://www.lua.org/ftp/lua-5.4.6.tar.gz -o /tmp/lua.tgz
+          tar -xzf /tmp/lua.tgz -C /tmp
+          make -C /tmp/lua-5.4.6 linux MYCFLAGS="-fPIC" >/dev/null
+          ls -l /tmp/lua-5.4.6/src/liblua.a
+
+      - name: Build native kernels (4 languages x 2 platforms)
+        run: ./native/build_all.sh
+
+      - name: Build & run cross-language bit-exact harness
+        run: |
+          gcc -O2 -std=c11 -I native -o native/harness/mars_harness \
+              native/harness/mars_harness.c -ldl -lm
+          ./native/harness/mars_harness --vectors=native/vectors/golden.txt \
+              native/cpp/build/libmars_kernel_cpp.so \
+              native/rust/build/libmars_kernel_rust.so \
+              native/go/build/libmars_kernel_go.so \
+              native/lua/build/libmars_kernel_lua.so | tee harness.log
+          grep -q "ALL PASS" harness.log
+
+      - name: Download Godot ${{ env.GODOT_VERSION }}
+        run: |
+          curl -sSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
+          unzip -q -o /tmp/godot.zip -d /tmp/godot
+          mv /tmp/godot/Godot_v${GODOT_RELEASE}_linux.x86_64 /tmp/godot/godot
+          chmod +x /tmp/godot/godot
+          /tmp/godot/godot --version
+
+      - name: Download export templates
+        run: |
+          curl -sSL -o /tmp/templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates
+          unzip -q -o /tmp/templates.tpz -d /tmp/tpl
+          mv /tmp/tpl/templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable | head -5
+
+      - name: Import project (build resource cache)
+        run: /tmp/godot/godot --headless --path . --import || true
+
+      - name: Export Windows executable (double-click, pck embedded)
+        run: |
+          mkdir -p build
+          /tmp/godot/godot --headless --path . --export-release "Windows Desktop" build/MarsArena64Type.exe
+          ls -lh build/MarsArena64Type.exe
+
+      - name: Export Linux executable
+        run: |
+          /tmp/godot/godot --headless --path . --export-release "Linux" build/MarsArena64Type.x86_64
+          chmod +x build/MarsArena64Type.x86_64
+          ls -lh build/MarsArena64Type.x86_64
+
+      - name: Smoke test (Linux binary starts and applies graphics preset)
+        run: |
+          timeout 60 ./build/MarsArena64Type.x86_64 --headless --quit-after 90 2>&1 | tee smoke.log || true
+          grep -q "GraphicsQuality" smoke.log
+
+      - name: Package release assets
+        run: |
+          mkdir -p dist
+          cp build/MarsArena64Type.exe dist/MarsArena64Type-Windows-x86_64.exe
+          cp build/MarsArena64Type.x86_64 dist/MarsArena64Type-Linux-x86_64
+          # 原生内核（可选进阶包，供开发者核对/替换）
+          mkdir -p dist/native-kernels/windows dist/native-kernels/linux
+          cp native/*/build/*.dll dist/native-kernels/windows/ 2>/dev/null || true
+          cp native/cpp/build/*.so native/go/build/*.so native/lua/build/*.so dist/native-kernels/linux/ 2>/dev/null || true
+          cp native/rust/build/*.so dist/native-kernels/linux/ 2>/dev/null || true
+          cp native/vectors/golden.txt dist/native-kernels/
+          cd dist
+          zip -q -9 MarsArena64Type-Windows-x86_64.zip MarsArena64Type-Windows-x86_64.exe
+          zip -q -9 MarsArena64Type-Linux-x86_64.zip MarsArena64Type-Linux-x86_64
+          zip -q -9 native-kernels.zip -r native-kernels
+          ls -lh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mars-arena-64type-${{ github.sha }}
+          path: |
+            dist/*.zip
+            harness.log
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 火星竞技场 64型 ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## 下载即用
+
+            | 平台 | 文件 | 用法 |
+            | --- | --- | --- |
+            | Windows 10/11 x64 | `MarsArena64Type-Windows-x86_64.zip` | 解压后**双击 exe** |
+            | Linux x64 | `MarsArena64Type-Linux-x86_64.zip` | 解压后双击（或 `./MarsArena64Type-Linux-x86_64`） |
+
+            无需安装 Godot，无需命令行参数，游戏数据已内嵌（单文件）。
+
+            ## 画质
+
+            自动探测显卡：独显走 `medium`，软件渲染/未知适配器自动降到 `low`。
+            也可手动指定：`MarsArena64Type.exe --quality=high` / `--low-gpu`。
+
+            ## 多语言原生内核
+
+            同一套算法（见 `native/SPEC.md`）由 **C++ / Rust / Go / Lua** 四份实现提供，
+            与 GDScript 参考实现**逐位一致**（322 组 golden 向量，`native/harness` 校验通过）。
+            `native-kernels.zip` 是这四种实现的独立构建产物。
+          files: |
+            dist/MarsArena64Type-Windows-x86_64.zip
+            dist/MarsArena64Type-Linux-x86_64.zip
+            dist/native-kernels.zip
