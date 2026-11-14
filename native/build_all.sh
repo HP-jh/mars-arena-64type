@@ -30,7 +30,7 @@ build_cpp() {
   local out_so="native/cpp/build/libmars_kernel_cpp.so"
   local out_dll="native/cpp/build/mars_kernel_cpp.dll"
   mkdir -p native/cpp/build
-  g++ -O2 -std=c++17 -fPIC -shared -I native -o "$out_so" native/cpp/mars_kernel.cpp
+  g++ -O2 -std=c++17 -fPIC -shared -Wl,--no-undefined -I native -o "$out_so" native/cpp/mars_kernel.cpp
   command -v "$WIN_GCC" >/dev/null || return 4
   "$WIN_GCC" -O2 -std=c++17 -shared -static-libgcc -static-libstdc++ \
       -I native -o "$out_dll" native/cpp/mars_kernel.cpp
@@ -58,8 +58,15 @@ build_go() {
 build_lua() {
   mkdir -p native/lua/build
   # 1) Linux .so（链接系统 Lua 静态库）
-  ( cd native/lua && xxd -i -n mars_lua_source mars_kernel.lua > lua_source_blob.c )
-  gcc -O2 -std=c11 -fPIC -shared -I native -I"$LUA_SRC/src" \
+  #    用 python 生成 C 数组：xxd 各发行版参数支持不一致，曾导致 blob 为空
+  python3 native/lua/gen_blob.py || return 5
+  # 防御：blob 必须含符号，否则 .so 会带着 undefined symbol 静默产出
+  if ! grep -q "mars_lua_source" native/lua/lua_source_blob.c; then
+    echo "gen_blob.py produced an empty blob" >&2
+    return 6
+  fi
+  # -Wl,--no-undefined 让「符号没链上」在构建期就失败，而不是运行时才炸
+  gcc -O2 -std=c11 -fPIC -shared -Wl,--no-undefined -I native -I"$LUA_SRC/src" \
       -o native/lua/build/libmars_kernel_lua.so \
       native/lua/mars_kernel_shim.c native/lua/lua_source_blob.c \
       -L"$LUA_SRC/src" -llua -lm -ldl
